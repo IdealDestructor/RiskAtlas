@@ -1,5 +1,5 @@
 {
-  "name": "yutu",
+  "name": "riskatlas",
   "version": "1.0.0",
   "private": true,
   "description": "舆图 · LLM 驱动的实时实体风险情报平台",
@@ -10,7 +10,7 @@
     "lint": "pnpm -r run lint",
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
-    "gen:api-types": "pnpm --filter @yutu/web run gen:api-types"
+    "gen:api-types": "pnpm --filter @riskatlas/web run gen:api-types"
   },
   "engines": {
     "node": ">=20"

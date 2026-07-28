@@ -55,7 +55,7 @@ graph TB
 ## 3. 仓库结构（Monorepo，pnpm workspace，无 Turborepo 依赖）
 
 ```
-Yutu/
+RiskAtlas/
 ├── apps/
 │   ├── web/                    # Next.js 15 前端
 │   │   ├── app/                # App Router 路由（/、/analysis/[id]、…）

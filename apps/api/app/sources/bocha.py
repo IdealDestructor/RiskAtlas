@@ -19,7 +19,7 @@ class BochaSource:
         self._key = api_key
         self._client = httpx.AsyncClient(
             timeout=12,
-            headers={"Authorization": f"Bearer {api_key}", "User-Agent": "Yutu/1.0"},
+            headers={"Authorization": f"Bearer {api_key}", "User-Agent": "RiskAtlas/1.0"},
         )
 
     async def search(

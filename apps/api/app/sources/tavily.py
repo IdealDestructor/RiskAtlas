@@ -17,7 +17,7 @@ class TavilySource:
 
     def __init__(self, api_key: str) -> None:
         self._key = api_key
-        self._client = httpx.AsyncClient(timeout=12, headers={"User-Agent": "Yutu/1.0"})
+        self._client = httpx.AsyncClient(timeout=12, headers={"User-Agent": "RiskAtlas/1.0"})
 
     async def search(
         self, query: str, *, days: int, lang: str, limit: int

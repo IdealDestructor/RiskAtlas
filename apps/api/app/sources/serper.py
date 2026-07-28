@@ -18,7 +18,7 @@ class SerperSource:
         self._key = api_key
         self._client = httpx.AsyncClient(
             timeout=12,
-            headers={"X-API-KEY": api_key, "User-Agent": "Yutu/1.0"},
+            headers={"X-API-KEY": api_key, "User-Agent": "RiskAtlas/1.0"},
         )
 
     async def search(

@@ -28,7 +28,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://yutu:yutu@postgres:5432/yutu
+      DATABASE_URL: postgresql+asyncpg://riskatlas:riskatlas@postgres:5432/riskatlas
       REDIS_URL: redis://redis:6379/0
     depends_on:
       postgres:
@@ -47,15 +47,15 @@ services:
     image: postgres:16-alpine
     container_name: riskatlas-postgres
     environment:
-      POSTGRES_USER: yutu
-      POSTGRES_PASSWORD: yutu
-      POSTGRES_DB: yutu
+      POSTGRES_USER: riskatlas
+      POSTGRES_PASSWORD: riskatlas
+      POSTGRES_DB: riskatlas
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U yutu -d yutu"]
+      test: ["CMD-SHELL", "pg_isready -U riskatlas -d riskatlas"]
       interval: 5s
       timeout: 3s
       retries: 5

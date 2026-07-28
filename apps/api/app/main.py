@@ -27,4 +27,4 @@ app.include_router(analyses.router, prefix=API_PREFIX)
 
 @app.get("/")
 async def root() -> dict[str, str]:
-    return {"name": "舆图 Yutu API", "docs": f"{API_PREFIX}/docs"}
+    return {"name": "舆图 RiskAtlas API", "docs": f"{API_PREFIX}/docs"}
