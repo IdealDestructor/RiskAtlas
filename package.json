@@ -1,0 +1,18 @@
+{
+  "name": "yutu",
+  "version": "1.0.0",
+  "private": true,
+  "description": "舆图 · LLM 驱动的实时实体风险情报平台",
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter \"./apps/*\" run dev",
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "gen:api-types": "pnpm --filter @yutu/web run gen:api-types"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

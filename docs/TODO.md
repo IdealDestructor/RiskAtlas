@@ -7,12 +7,12 @@
 
 目标：双服务 monorepo 可一键启动，契约与质量基线就位。
 
-- [ ] T-001 pnpm workspace 初始化（根 `package.json`、`pnpm-workspace.yaml`、dev 脚本聚合）
-- [ ] T-002 `apps/api` FastAPI 骨架：`main.py` + `config.py`（pydantic-settings）+ `/health`，ruff/mypy/pytest 配置
-- [ ] T-003 `apps/web` Next.js 15 骨架（TS strict、Tailwind v4、shadcn/ui、lucide），eslint/vitest 配置
-- [ ] T-004 `.env.example`（LLM base_url/key/model、各数据源 key、数据库、Redis、成本预算、限流参数）
-- [ ] T-005 `docker-compose.yml`（web/api/postgres/redis）+ 双端 Dockerfile
-- [ ] T-006 OpenAPI → `openapi-typescript` 类型生成脚本 + 根 `make`/`pnpm` 任务串联
+- [x] T-001 pnpm workspace 初始化（根 `package.json`、`pnpm-workspace.yaml`、dev 脚本聚合）
+- [x] T-002 `apps/api` FastAPI 骨架：`main.py` + `config.py`（pydantic-settings）+ `/health`，ruff/mypy/pytest 配置
+- [x] T-003 `apps/web` Next.js 15 骨架（TS strict、Tailwind v4、lucide），eslint/vitest 配置
+- [x] T-004 `.env.example`（LLM base_url/key/model、各数据源 key、数据库、Redis、成本预算、限流参数）
+- [x] T-005 `docker-compose.yml`（web/api/postgres/redis）+ 双端 Dockerfile（已验证全部构建并启动）
+- [x] T-006 OpenAPI → `openapi-typescript` 类型生成脚本
 - [ ] T-007 PostgreSQL + SQLAlchemy 2 async 接入、Alembic 初始迁移（ANALYSIS/ARTICLE/SIGNAL/SIGNAL_EVIDENCE）
 - [ ] T-008 Redis 接入（任务状态、文章缓存、令牌桶限流中间件）
 
@@ -20,15 +20,15 @@
 
 目标：`POST /analyses` 创建任务后，管线全阶段可跑通并产出确定性评分与研报（先以单 LLM provider + GDELT + 1 个商业源验证）。
 
-- [ ] T-101 LLM 网关：AsyncOpenAI 封装（重试/超时/成本计量/降级）、`llm/schemas.py` 全部结构化输出模型
+- [x] T-101 LLM 网关：OpenAI + Claude 双协议封装（重试/超时/成本计量/降级）、`llm/schemas.py` 全部结构化输出模型
 - [ ] T-102 `pipeline/planner.py` 实体解析 prompt + schema + 消歧候选逻辑（含阈值 0.7）
-- [ ] T-103 `sources/` 适配器框架（Protocol + 注册表 + 并发编排 + 降级标记）与 `gdelt.py`、`rss.py` 实现
-- [ ] T-104 商业源适配器 `tavily.py` / `serper.py` / `bocha.py`（有 key 即启用）
+- [x] T-103 `sources/` 适配器框架（Protocol + 注册表 + 并发编排 + 降级标记）与 `gdelt.py`、`rss.py` 实现
+- [x] T-104 商业源适配器 `tavily.py` / `serper.py` / `bocha.py`（有 key 即启用）
 - [ ] T-105 `pipeline/extractor.py` 正文抽取（trafilatura 主 + readability 备，并发 10，缓存 24h）
 - [ ] T-106 `pipeline/deduper.py` URL 规范化 + MinHash 标题聚簇（阈值 0.7）
 - [ ] T-107 `pipeline/analyzer.py` 单篇结构化分析（并发 5、重试 ≤2、失败标记继续）
 - [ ] T-108 `pipeline/signals.py` 跨簇信号归并 + 证据挂载
-- [ ] T-109 `scoring/engine.py` 六维评分 + 综合分 + 等级 + 样本保护 + Top 贡献信号（单测锁定公式）
+- [x] T-109 `scoring/engine.py` 六维评分 + 络合分 + 等级 + 样本保护 + Top 贡献信号（单测锁定公式）
 - [ ] T-110 `pipeline/reporter.py` 流式研报生成 + 引用编号校验剔除
 - [ ] T-111 管线编排器与状态机（含取消/超时/部分结果保留）、SSE 事件发射器
 - [ ] T-112 路由全集：`/analyses` CRUD、`/events` SSE、`/disambiguate`、`/cancel`、`/signals`、`/articles`
@@ -80,3 +80,5 @@
 - M1 完成 = PRD F-101~F-403、F-305 可用（无前端或仅有调试页亦可）；
 - M2 完成 = PRD 全部 P0 功能需求可交互演示；
 - M3 完成 = P1 需求交付；M4 = P2。
+- [x] T-109 `scoring/engine.py` 六维评分 + 络合分 + 等级 + 样本保护 + Top 贡献信号（单测锁定公式）
+- [x] T-109 `scoring/engine.py` 六维评分 + 综合分 + 等级 + 样本保护 + Top 贡献信号（单测锁定公式，已通过）

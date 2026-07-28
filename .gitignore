@@ -7,6 +7,23 @@ yarn-error.log*
 /data/
 /HelloServlet/
 
+# 新项目
+.env
+.env.local
+.next/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+env/
+venv/
+coverage/
+test-results/
+playwright-report/
+*.tsbuildinfo
+
 # Editor directories and files
 .idea
 .vscode
