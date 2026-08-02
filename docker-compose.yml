@@ -28,7 +28,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://riskatlas:riskatlas@postgres:5432/riskatlas
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-riskatlas}:${POSTGRES_PASSWORD:-riskatlas}@postgres:5432/${POSTGRES_DB:-riskatlas}
       REDIS_URL: redis://redis:6379/0
     depends_on:
       postgres:
@@ -47,15 +47,15 @@ services:
     image: postgres:16-alpine
     container_name: riskatlas-postgres
     environment:
-      POSTGRES_USER: riskatlas
-      POSTGRES_PASSWORD: riskatlas
-      POSTGRES_DB: riskatlas
+      POSTGRES_USER: ${POSTGRES_USER:-riskatlas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-riskatlas}
+      POSTGRES_DB: ${POSTGRES_DB:-riskatlas}
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U riskatlas -d riskatlas"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-riskatlas} -d ${POSTGRES_DB:-riskatlas}"]
       interval: 5s
       timeout: 3s
       retries: 5

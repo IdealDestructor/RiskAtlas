@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "get-job": {
+      "source": "agentenatalie/get-job.skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "f4144a80f58a3910e915ea2518e0095142fe287f7cf2305e39ef3ba91bdfc983"
+    }
+  }
+}

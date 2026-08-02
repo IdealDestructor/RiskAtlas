@@ -1,0 +1,23 @@
+Metadata-Version: 2.4
+Name: riskatlas-api
+Version: 1.0.0
+Summary: 舆图 · LLM 驱动的实时实体风险情报平台 — 后端 API
+Requires-Python: >=3.12
+Requires-Dist: fastapi>=0.115
+Requires-Dist: uvicorn[standard]>=0.30
+Requires-Dist: pydantic>=2.9
+Requires-Dist: pydantic-settings>=2.5
+Requires-Dist: sqlalchemy[asyncio]>=2.0.35
+Requires-Dist: asyncpg>=0.29
+Requires-Dist: alembic>=1.13
+Requires-Dist: redis[hiredis]>=5.1
+Requires-Dist: httpx>=0.27
+Requires-Dist: openai>=1.50
+Requires-Dist: anthropic>=0.40
+Requires-Dist: trafilatura>=1.12
+Requires-Dist: datasketch>=1.6
+Requires-Dist: feedparser>=6.0
+Requires-Dist: python-dateutil>=2.9
+Requires-Dist: structlog>=24.4
+Requires-Dist: tenacity>=9.0
+Requires-Dist: sse-starlette>=2.1

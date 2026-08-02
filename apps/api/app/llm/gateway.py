@@ -11,10 +11,13 @@ provider/model/base_url/api_key 完全由环境变量驱动。
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import random
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Literal, TypedDict
+from typing import Any, Literal, TypedDict
 
 import anthropic
 import openai
@@ -22,6 +25,41 @@ import openai
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+# 429 限流/瞬态错误的应用层退避参数：SDK 自带重试间隔太短（<2s），
+# 跨不过服务商按分钟统计的限流窗口，故在网关层做 5s 起步的指数退避。
+_RATE_LIMIT_BASE_DELAY = 5.0
+_RATE_LIMIT_MAX_DELAY = 60.0
+
+_RETRYABLE_ERRORS = (
+    openai.RateLimitError,
+    openai.APITimeoutError,
+    openai.APIConnectionError,
+    openai.InternalServerError,
+    anthropic.RateLimitError,
+    anthropic.APITimeoutError,
+    anthropic.APIConnectionError,
+    anthropic.InternalServerError,
+)
+
+
+async def _with_backoff[T](fn: Callable[[], Awaitable[T]], *, retries: int) -> T:
+    """对 429/瞬态错误做指数退避重试；fn 为无参协程工厂（每次重试重新调用）。"""
+    for attempt in range(retries + 1):
+        try:
+            return await fn()
+        except _RETRYABLE_ERRORS as e:
+            if attempt >= retries:
+                raise
+            delay = min(_RATE_LIMIT_MAX_DELAY, _RATE_LIMIT_BASE_DELAY * (2**attempt))
+            delay += random.uniform(0, 1)
+            logger.warning(
+                "LLM 调用被限流/瞬态错误，%.1fs 后重试（第 %d/%d 次）: %s",
+                delay, attempt + 1, retries, e,
+            )
+            await asyncio.sleep(delay)
+    raise AssertionError("unreachable")
+
 
 Role = Literal["system", "user", "assistant"]
 
@@ -81,10 +119,30 @@ class LLMGateway:
     def __init__(self, provider: str | None = None, model: str | None = None) -> None:
         s = get_settings()
         self.provider = (provider or s.analysis_llm_provider).lower()
+        self._rl_retries = s.llm_rate_limit_retries
+        # 优先走 OpenAI 兼容服务商注册表（任意 OpenAI 规范服务商）
+        entry = s.resolve_llm_provider(self.provider)
+        if entry is not None:
+            self.protocol = "openai"
+            self.model = model or entry.model or s.analysis_llm_model
+            self._price = (
+                (entry.price_input_cny, entry.price_output_cny)
+                if entry.price_input_cny is not None and entry.price_output_cny is not None
+                else None
+            )
+            self._client = openai.AsyncOpenAI(
+                api_key=entry.api_key or s.analysis_llm_api_key or s.openai_llm_api_key or "EMPTY",
+                base_url=entry.base_url or s.analysis_llm_base_url,
+                timeout=s.llm_request_timeout_seconds,
+                max_retries=s.llm_max_retries,
+            )
+            return
         self.model = model or (
             s.claude_llm_model if self.provider == "claude" else s.analysis_llm_model
         )
+        self._price = None
         if self.provider == "openai":
+            self.protocol = "openai"
             self._client = openai.AsyncOpenAI(
                 api_key=s.analysis_llm_api_key or s.openai_llm_api_key or "EMPTY",
                 base_url=s.analysis_llm_base_url,
@@ -92,6 +150,7 @@ class LLMGateway:
                 max_retries=s.llm_max_retries,
             )
         elif self.provider == "claude":
+            self.protocol = "claude"
             self._client = anthropic.AsyncAnthropic(
                 api_key=s.claude_llm_api_key,
                 timeout=s.llm_request_timeout_seconds,
@@ -109,7 +168,7 @@ class LLMGateway:
         max_tokens: int = 1536,
         cost: LLMCostTracker | None = None,
     ) -> LLMResponse:
-        if self.provider == "openai":
+        if self.protocol == "openai":
             return await self._openai_structured(messages, schema, temperature, max_tokens, cost)
         return await self._claude_structured(messages, schema, temperature, max_tokens, cost)
 
@@ -121,14 +180,17 @@ class LLMGateway:
         max_tokens: int = 1800,
         cost: LLMCostTracker | None = None,
     ) -> AsyncIterator[str]:
-        if self.provider == "openai":
-            stream = await self._client.chat.completions.create(  # type: ignore[union-attr]
-                model=self.model,
-                messages=_normalize_openai_messages(messages),
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stream=True,
-                stream_options={"include_usage": True},
+        if self.protocol == "openai":
+            stream = await _with_backoff(
+                lambda: self._client.chat.completions.create(  # type: ignore[union-attr]
+                    model=self.model,
+                    messages=_normalize_openai_messages(messages),
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=True,
+                    stream_options={"include_usage": True},
+                ),
+                retries=self._rl_retries,
             )
             usage = LLMUsage(0, 0, self.model)
             assert stream is not None
@@ -139,39 +201,60 @@ class LLMGateway:
                 if getattr(chunk, "usage", None):
                     usage.input_tokens = chunk.usage.prompt_tokens
                     usage.output_tokens = chunk.usage.completion_tokens
-                    usage.cost_cny = _calc_cost(usage)
+                    usage.cost_cny = _calc_cost(usage, self._price)
                     if cost:
                         cost.add(usage)
         else:
-            async with self._client.messages.stream(  # type: ignore[union-attr]
-                model=self.model,
-                system=_extract_system(messages),
-                messages=_normalize_claude_messages(messages),
-                max_tokens=max_tokens,
-                temperature=temperature,
-            ) as stream:
-                usage = LLMUsage(0, 0, self.model)
-                async for text in stream.text_stream:  # type: ignore[union-attr]
-                    yield text
-                final = await stream.get_final_message()
-                usage.input_tokens = final.usage.input_tokens
-                usage.output_tokens = final.usage.output_tokens
-                usage.cost_cny = _calc_cost(usage)
-                if cost:
-                    cost.add(usage)
+            # 仅在尚未产出任何文本前允许退避重试，避免重复输出
+            attempt = 0
+            while True:
+                emitted = False
+                try:
+                    async with self._client.messages.stream(  # type: ignore[union-attr]
+                        model=self.model,
+                        system=_extract_system(messages),
+                        messages=_normalize_claude_messages(messages),
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                    ) as stream:
+                        usage = LLMUsage(0, 0, self.model)
+                        async for text in stream.text_stream:  # type: ignore[union-attr]
+                            emitted = True
+                            yield text
+                        final = await stream.get_final_message()
+                        usage.input_tokens = final.usage.input_tokens
+                        usage.output_tokens = final.usage.output_tokens
+                        usage.cost_cny = _calc_cost(usage, self._price)
+                        if cost:
+                            cost.add(usage)
+                    return
+                except _RETRYABLE_ERRORS as e:
+                    if emitted or attempt >= self._rl_retries:
+                        raise
+                    attempt += 1
+                    delay = min(_RATE_LIMIT_MAX_DELAY, _RATE_LIMIT_BASE_DELAY * (2 ** (attempt - 1)))
+                    delay += random.uniform(0, 1)
+                    logger.warning(
+                        "Claude 流式调用被限流/瞬态错误，%.1fs 后重试（第 %d/%d 次）: %s",
+                        delay, attempt, self._rl_retries, e,
+                    )
+                    await asyncio.sleep(delay)
 
     async def _openai_structured(
         self, messages, schema, temperature, max_tokens, cost
     ) -> LLMResponse:
-        resp = await self._client.chat.completions.create(  # type: ignore[union-attr]
-            model=self.model,
-            messages=_normalize_openai_messages(messages),
-            temperature=temperature,
-            max_tokens=max_tokens,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {"name": "structured_output", "schema": schema, "strict": True},
-            },
+        resp = await _with_backoff(
+            lambda: self._client.chat.completions.create(  # type: ignore[union-attr]
+                model=self.model,
+                messages=_normalize_openai_messages(messages),
+                temperature=temperature,
+                max_tokens=max_tokens,
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {"name": "structured_output", "schema": schema, "strict": True},
+                },
+            ),
+            retries=self._rl_retries,
         )
         content = resp.choices[0].message.content or "{}"
         parsed = json.loads(content)
@@ -180,28 +263,31 @@ class LLMGateway:
             resp.usage.completion_tokens if resp.usage else 0,
             self.model,
         )
-        usage.cost_cny = _calc_cost(usage)
+        usage.cost_cny = _calc_cost(usage, self._price)
         if cost:
             cost.add(usage)
-        return LLMResponse(content, parsed, usage, self.model, "openai")
+        return LLMResponse(content, parsed, usage, self.model, self.provider)
 
     async def _claude_structured(
         self, messages, schema, temperature, max_tokens, cost
     ) -> LLMResponse:
         tool_name = "emit_structured_result"
         tool_input_schema = {k: v for k, v in schema.items() if k != "type"}
-        resp = await self._client.messages.create(  # type: ignore[union-attr]
-            model=self.model,
-            system=_extract_system(messages),
-            messages=_normalize_claude_messages(messages),
-            max_tokens=max_tokens,
-            temperature=temperature,
-            tools=[{
-                "name": tool_name,
-                "description": "输出符合规范的结构化结果",
-                "input_schema": tool_input_schema,
-            }],
-            tool_choice={"type": "tool", "name": tool_name},
+        resp = await _with_backoff(
+            lambda: self._client.messages.create(  # type: ignore[union-attr]
+                model=self.model,
+                system=_extract_system(messages),
+                messages=_normalize_claude_messages(messages),
+                max_tokens=max_tokens,
+                temperature=temperature,
+                tools=[{
+                    "name": tool_name,
+                    "description": "输出符合规范的结构化结果",
+                    "input_schema": tool_input_schema,
+                }],
+                tool_choice={"type": "tool", "name": tool_name},
+            ),
+            retries=self._rl_retries,
         )
         parsed: dict[str, Any] = {}
         for block in resp.content:
@@ -210,10 +296,10 @@ class LLMGateway:
                 break
         content = json.dumps(parsed, ensure_ascii=False)
         usage = LLMUsage(resp.usage.input_tokens, resp.usage.output_tokens, self.model)
-        usage.cost_cny = _calc_cost(usage)
+        usage.cost_cny = _calc_cost(usage, self._price)
         if cost:
             cost.add(usage)
-        return LLMResponse(content, parsed, usage, self.model, "claude")
+        return LLMResponse(content, parsed, usage, self.model, self.provider)
 
 
 def _extract_system(messages: list[Message]) -> str:
@@ -235,6 +321,6 @@ def _normalize_claude_messages(messages: list[Message]) -> list[dict[str, str]]:
     ]
 
 
-def _calc_cost(u: LLMUsage) -> float:
-    p_in, p_out = _PRICE_CNY.get(u.model, _DEFAULT_PRICE)
+def _calc_cost(u: LLMUsage, price: tuple[float, float] | None = None) -> float:
+    p_in, p_out = price or _PRICE_CNY.get(u.model, _DEFAULT_PRICE)
     return round(u.input_tokens / 1000 * p_in + u.output_tokens / 1000 * p_out, 6)

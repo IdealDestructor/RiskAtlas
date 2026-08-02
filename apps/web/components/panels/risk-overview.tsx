@@ -1,26 +1,13 @@
 "use client";
 
 import { useECharts } from "@/components/charts/use-echarts";
-import { GRADE_LABEL, RISK_COLORS } from "@/lib/utils";
+import { DIM_LABELS, GRADE_LABEL, RISK_COLORS } from "@/lib/utils";
 import type { ScoresPayload } from "@/lib/sse-store";
 
-const DIM_LABELS: Record<string, string> = {
-  judicial: "司法诉讼",
-  finance: "财务信用",
-  regulatory: "监管合规",
-  governance: "经营治理",
-  quality: "产品质量",
-  reputation: "声誉舆情",
-};
-
 export function RiskOverview({ scores }: { scores: ScoresPayload | null }) {
-  if (!scores) {
-    return <div className="flex h-64 items-center justify-center text-sm text-[var(--color-muted)]">等待评分数据…</div>;
-  }
-
-  const overall = scores.overall;
-  const gradeColor = RISK_COLORS[scores.grade] ?? "var(--color-muted)";
-  const radarValues = Object.keys(DIM_LABELS).map((d) => scores.dimensions[d]?.score ?? 0);
+  const overall = scores?.overall ?? 0;
+  const gradeColor = (scores && RISK_COLORS[scores.grade]) ?? "var(--color-muted)";
+  const radarValues = Object.keys(DIM_LABELS).map((d) => scores?.dimensions[d]?.score ?? 0);
 
   const gaugeRef = useECharts(
     {
@@ -31,17 +18,19 @@ export function RiskOverview({ scores }: { scores: ScoresPayload | null }) {
           endAngle: -20,
           min: 0,
           max: 100,
-          radius: "90%",
-          progress: { show: true, width: 14, roundCap: true, color: gradeColor },
-          axisLine: { lineStyle: { width: 14, color: [[1, "#e2e8f0"]] } },
+          radius: "100%",
+          center: ["50%", "55%"],
+          progress: { show: true, width: 16, roundCap: true, color: gradeColor },
+          axisLine: { lineStyle: { width: 16, color: [[1, "#e2e8f0"]] } },
           axisTick: { show: false },
           splitLine: { show: false },
+          axisLabel: { show: false },
           pointer: { show: false },
           detail: {
             valueAnimation: true,
-            fontSize: 28,
+            fontSize: 32,
             fontWeight: "bold",
-            offsetCenter: [0, "0%"],
+            offsetCenter: [0, "38%"],
             formatter: "{value}",
             color: "#0f172a",
           },
@@ -56,8 +45,8 @@ export function RiskOverview({ scores }: { scores: ScoresPayload | null }) {
     {
       radar: {
         indicator: Object.keys(DIM_LABELS).map((d) => ({ name: DIM_LABELS[d], max: 100 })),
-        radius: "65%",
-        axisName: { color: "#64748b", fontSize: 11 },
+        radius: "72%",
+        axisName: { color: "#64748b", fontSize: 12 },
         splitLine: { lineStyle: { color: "#e2e8f0" } },
         splitArea: { show: false },
       },
@@ -78,11 +67,15 @@ export function RiskOverview({ scores }: { scores: ScoresPayload | null }) {
     [radarValues.join(",")]
   );
 
+  if (!scores) {
+    return <div className="flex h-64 items-center justify-center text-sm text-[var(--color-muted)]">等待评分数据…</div>;
+  }
+
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-4">
-        <div ref={gaugeRef} className="h-40 w-40" />
-        <div className="space-y-1">
+    <div className="space-y-5">
+      <div className="flex flex-col items-center gap-2">
+        <div ref={gaugeRef} className="h-56 w-56" />
+        <div className="flex flex-col items-center gap-1">
           <div className="text-xs text-[var(--color-muted)]">综合风险分</div>
           <span
             className="inline-block rounded px-2.5 py-1 text-sm font-semibold text-white"
@@ -95,7 +88,10 @@ export function RiskOverview({ scores }: { scores: ScoresPayload | null }) {
           </div>
         </div>
       </div>
-      <div ref={radarRef} className="h-56 w-full" />
+      <div>
+        <div className="mb-1 text-xs font-semibold text-[var(--color-muted)]">六维风险雷达</div>
+        <div ref={radarRef} className="h-72 w-full" />
+      </div>
     </div>
   );
 }

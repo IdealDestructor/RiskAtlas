@@ -30,59 +30,66 @@ export default function HomePage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center gap-8 px-4">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold tracking-tight">RiskAtlas</h1>
-        <p className="mt-3 text-base text-[var(--color-muted)]">
-          输入公司、品牌或人物，30 秒内生成实时风险画像
-        </p>
-      </div>
+    <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-indigo-100 via-sky-50 to-fuchsia-100 px-4">
+      <div className="glow-float-a pointer-events-none absolute -left-24 -top-24 size-96 rounded-full bg-gradient-to-br from-indigo-400 to-sky-300 blur-3xl" />
+      <div className="glow-float-b pointer-events-none absolute -right-24 top-1/3 size-[28rem] rounded-full bg-gradient-to-br from-fuchsia-400 to-pink-300 blur-3xl" />
+      <div className="glow-float-c pointer-events-none absolute -bottom-32 left-1/4 size-96 rounded-full bg-gradient-to-br from-amber-300 to-orange-300 blur-3xl" />
+      <div className="glow-float-d pointer-events-none absolute bottom-1/4 right-1/4 size-64 rounded-full bg-gradient-to-br from-cyan-300 to-emerald-300 blur-3xl" />
 
-      <form onSubmit={submit} className="w-full space-y-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-[var(--color-muted)]" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="输入查询词，如公司名称"
-            className="h-14 w-full rounded-lg border border-[var(--color-border)] bg-white pl-11 pr-4 text-lg outline-none focus:border-slate-400"
-          />
+      <div className="relative mx-auto flex w-full max-w-2xl flex-col items-center gap-8">
+        <div className="text-center">
+          <h1 className="text-4xl font-bold tracking-tight text-slate-900" style={{ fontFamily: 'serif' }}>舆图</h1>
+          <p className="mt-3 text-base text-[var(--color-muted)]">
+            输入公司、品牌或人物，30 秒内生成实时风险画像
+          </p>
         </div>
 
-        <div className="flex items-center gap-2 text-sm text-[var(--color-muted)]">
-          <span>时间窗</span>
-          {[7, 30, 90].map((d) => (
+        <form onSubmit={submit} className="w-full space-y-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-[var(--color-muted)]" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="输入查询词，如公司名称"
+              className="h-14 w-full rounded-lg border border-[var(--color-border)] bg-white pl-11 pr-4 text-lg outline-none focus:border-slate-400"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 text-sm text-[var(--color-muted)]">
+            <span>时间窗</span>
+            {[7, 30, 90].map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setDays(d)}
+                className={`rounded-md px-3 py-1 ${days === d ? "bg-slate-900 text-white" : "bg-slate-100"}`}
+              >
+                {d} 天
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading || !query.trim()}
+            className="h-12 w-full rounded-lg bg-slate-900 font-medium text-white shadow-lg shadow-indigo-500/30 disabled:opacity-50"
+          >
+            {loading ? "创建中…" : "开始分析"}
+          </button>
+          {err && <p className="text-sm text-[var(--color-risk-high)]">{err}</p>}
+        </form>
+
+        <div className="flex flex-wrap justify-center gap-2">
+          {EXAMPLES.map((ex) => (
             <button
-              key={d}
-              type="button"
-              onClick={() => setDays(d)}
-              className={`rounded-md px-3 py-1 ${days === d ? "bg-slate-900 text-white" : "bg-slate-100"}`}
+              key={ex}
+              onClick={() => setQuery(ex)}
+              className="rounded-full border border-[var(--color-border)] bg-white/70 px-3 py-1 text-sm text-[var(--color-muted)] hover:bg-white"
             >
-              {d} 天
+              {ex}
             </button>
           ))}
         </div>
-
-        <button
-          type="submit"
-          disabled={loading || !query.trim()}
-          className="h-12 w-full rounded-lg bg-slate-900 text-white font-medium disabled:opacity-50"
-        >
-          {loading ? "创建中…" : "开始分析"}
-        </button>
-        {err && <p className="text-sm text-[var(--color-risk-high)]">{err}</p>}
-      </form>
-
-      <div className="flex flex-wrap justify-center gap-2">
-        {EXAMPLES.map((ex) => (
-          <button
-            key={ex}
-            onClick={() => setQuery(ex)}
-            className="rounded-full border border-[var(--color-border)] px-3 py-1 text-sm text-[var(--color-muted)] hover:bg-slate-50"
-          >
-            {ex}
-          </button>
-        ))}
       </div>
     </main>
   );
