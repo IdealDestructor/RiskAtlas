@@ -7,7 +7,7 @@ API: https://api.gdeltproject.org/api/v2/doc/doc
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 import httpx
@@ -39,7 +39,11 @@ class GDELTSource:
         }
         resp = await self._client.get(_BASE, params=params)
         resp.raise_for_status()
-        data = resp.json()
+        try:
+            data = resp.json()
+        except ValueError:
+            logger.warning("gdelt 返回非 JSON 响应（可能是限流/临时故障）: %s", resp.text[:200])
+            return []
         articles: list[RawArticle] = []
         for item in data.get("articles", [])[:limit]:
             url = item.get("url", "")
@@ -67,7 +71,7 @@ def _parse_dt(s: str | None) -> datetime | None:
     # GDELT seendate 形如 20240115T120000Z
     for fmt in ("%Y%m%dT%H%M%SZ", "%Y%m%d"):
         try:
-            return datetime.strptime(s, fmt).replace(tzinfo=timezone.utc)
+            return datetime.strptime(s, fmt).replace(tzinfo=UTC)
         except ValueError:
             continue
     return None

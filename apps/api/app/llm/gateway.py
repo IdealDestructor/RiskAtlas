@@ -243,30 +243,70 @@ class LLMGateway:
     async def _openai_structured(
         self, messages, schema, temperature, max_tokens, cost
     ) -> LLMResponse:
+        mode = get_settings().llm_structured_mode
+        content, usage = await self._openai_structured_fallback(
+            mode, messages, schema, temperature, max_tokens
+        )
+        parsed = _extract_json(content)
+        usage.cost_cny = _calc_cost(usage, self._price)
+        if cost:
+            cost.add(usage)
+        return LLMResponse(content, parsed, usage, self.model, self.provider)
+
+    async def _openai_structured_fallback(
+        self, mode, messages, schema, temperature, max_tokens
+    ) -> tuple[str, LLMUsage]:
+        """按模式调用 OpenAI 兼容接口；auto 时对不支持 response_format 的服务商逐级降级。"""
+        if mode == "auto":
+            candidates = ("json_schema", "json_object", "prompt")
+        elif mode in ("json_schema", "json_object", "prompt"):
+            candidates = (mode,)
+        else:
+            raise ValueError(f"未知 llm_structured_mode: {mode}")
+
+        last_err: Exception | None = None
+        for i, cand in enumerate(candidates):
+            try:
+                return await self._openai_structured_call(
+                    cand, messages, schema, temperature, max_tokens
+                )
+            except openai.BadRequestError as e:
+                last_err = e
+                if i < len(candidates) - 1:
+                    logger.warning(
+                        "response_format=%s 不受支持（%s），降级为 %s",
+                        cand, e, candidates[i + 1],
+                    )
+        assert last_err is not None
+        raise last_err
+
+    async def _openai_structured_call(
+        self, mode, messages, schema, temperature, max_tokens
+    ) -> tuple[str, LLMUsage]:
+        kwargs: dict[str, Any] = {
+            "model": self.model,
+            "messages": _normalize_openai_messages(messages),
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        if mode == "json_schema":
+            kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"name": "structured_output", "schema": schema, "strict": True},
+            }
+        elif mode == "json_object":
+            kwargs["response_format"] = {"type": "json_object"}
         resp = await _with_backoff(
-            lambda: self._client.chat.completions.create(  # type: ignore[union-attr]
-                model=self.model,
-                messages=_normalize_openai_messages(messages),
-                temperature=temperature,
-                max_tokens=max_tokens,
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": {"name": "structured_output", "schema": schema, "strict": True},
-                },
-            ),
+            lambda: self._client.chat.completions.create(**kwargs),  # type: ignore[union-attr]
             retries=self._rl_retries,
         )
         content = resp.choices[0].message.content or "{}"
-        parsed = json.loads(content)
         usage = LLMUsage(
             resp.usage.prompt_tokens if resp.usage else 0,
             resp.usage.completion_tokens if resp.usage else 0,
             self.model,
         )
-        usage.cost_cny = _calc_cost(usage, self._price)
-        if cost:
-            cost.add(usage)
-        return LLMResponse(content, parsed, usage, self.model, self.provider)
+        return content, usage
 
     async def _claude_structured(
         self, messages, schema, temperature, max_tokens, cost
@@ -324,3 +364,27 @@ def _normalize_claude_messages(messages: list[Message]) -> list[dict[str, str]]:
 def _calc_cost(u: LLMUsage, price: tuple[float, float] | None = None) -> float:
     p_in, p_out = price or _PRICE_CNY.get(u.model, _DEFAULT_PRICE)
     return round(u.input_tokens / 1000 * p_in + u.output_tokens / 1000 * p_out, 6)
+
+
+def _extract_json(content: str) -> dict[str, Any]:
+    """从 LLM 输出中稳健解析 JSON 对象（容忍代码围栏与首尾杂质）。"""
+    text = content.strip()
+    if text.startswith("```"):
+        fence_end = text.find("\n")
+        text = text[fence_end + 1 :] if fence_end != -1 else ""
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+        if text.startswith("json"):
+            text = text[4:].strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    start, end = text.find("{"), text.rfind("}")
+    if start != -1 and end > start:
+        try:
+            return json.loads(text[start : end + 1])
+        except json.JSONDecodeError:
+            pass
+    raise ValueError(f"LLM 输出无法解析为 JSON: {content[:300]!r}")

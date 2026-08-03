@@ -10,9 +10,10 @@ import asyncio
 import json
 import logging
 import uuid
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import AsyncIterator, Literal
+from datetime import UTC, datetime
+from typing import Any, Literal
 
 from app.llm.gateway import LLMCostTracker, LLMGateway
 from app.pipeline.analyzer import analyze_all
@@ -38,6 +39,34 @@ RELEVANCE_THRESHOLD = 0.3
 ANALYZE_CONCURRENCY = 5
 
 
+def _to_float(value: Any, default: float = 0.0) -> float:
+    """将 LLM 返回的任意类型稳健转 float（容忍 "0.8" / 0.8 / "相关" 等杂值）。"""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(str(value).strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def _to_int(value: Any, default: int = 1) -> int:
+    """将 LLM 返回的任意类型稳健转 int（容忍 "5" / 5.9 / "非常严重" 等杂值）。"""
+    if isinstance(value, bool):
+        return int(value)
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _clamp(value: float, lo: float, hi: float) -> float:
+    return min(max(value, lo), hi)
+
+
 @dataclass
 class AnalysisTask:
     id: str
@@ -50,7 +79,7 @@ class AnalysisTask:
     entity_type: str | None = None
     sample_size: int = 0
     cost_cny: float = 0.0
-    created_at: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(tz=UTC))
     _queue: asyncio.Queue = field(default_factory=asyncio.Queue)
     _cancelled: bool = False
 
@@ -132,23 +161,29 @@ async def run_pipeline(task: AnalysisTask) -> None:
         )
         events: list[AnalyzedEvent] = []
         relevant = 0
-        for i, (art, an) in enumerate(zip(articles, analyses)):
+        for i, (art, an) in enumerate(zip(articles, analyses, strict=False)):
             if not an:
                 continue
-            relevance = float(an.get("relevance", 0.0))
+            relevance = _clamp(_to_float(an.get("relevance"), 0.0), 0.0, 1.0)
             relevant += 1 if relevance >= RELEVANCE_THRESHOLD else 0
-            for ev in an.get("events") or []:
+            raw_events = an.get("events") or []
+            if not isinstance(raw_events, list):
+                raw_events = []
+            for ev in raw_events:
+                if not isinstance(ev, dict):
+                    continue
                 events.append(
                     AnalyzedEvent(
                         dimension=ev.get("dimension", "reputation"),
                         label=ev.get("label") or "未知风险",
-                        severity=int(ev.get("severity", 1)),
-                        confidence=float(ev.get("confidence", 0.5)),
+                        severity=int(_clamp(_to_int(ev.get("severity"), 1), 1, 5)),
+                        confidence=_clamp(_to_float(ev.get("confidence"), 0.5), 0.0, 1.0),
                         summary=ev.get("summary") or "",
                         published_at=art.published_at,
                         article_index=i,
                     )
                 )
+            sentiment = an.get("sentiment") if isinstance(an.get("sentiment"), dict) else {}
             task.emit(
                 "article_analyzed",
                 {
@@ -157,7 +192,7 @@ async def run_pipeline(task: AnalysisTask) -> None:
                     "current": {
                         "title": art.title,
                         "relevance": relevance,
-                        "sentiment": an.get("sentiment", {}).get("label", "neutral"),
+                        "sentiment": sentiment.get("label", "neutral"),
                     },
                 },
             )

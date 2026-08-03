@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     claude_llm_api_key: str = ""
     claude_llm_model: str = "claude-sonnet-4-20250514"
 
+    # 结构化输出模式: auto（json_schema→json_object→prompt 自动降级）| json_schema | json_object | prompt
+    llm_structured_mode: str = "auto"
+
     llm_request_timeout_seconds: int = 30
     llm_max_retries: int = 2
     # 429 限流/瞬态错误的应用层退避重试次数（网关层指数退避，5s 起步封顶 60s）
