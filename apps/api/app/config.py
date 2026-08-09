@@ -11,7 +11,11 @@ from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 项目根目录（apps/api/app/config.py -> 仓库根），.env 固定在根目录
-_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
+_config_path = Path(__file__).resolve()
+_env_candidates: list[Path] = [Path.cwd() / ".env", Path("/app/.env")]
+if len(_config_path.parents) > 3:
+    _env_candidates.insert(0, _config_path.parents[3] / ".env")
+_ENV_FILE = next((candidate for candidate in _env_candidates if candidate.exists()), None)
 
 
 class OpenAICompatProvider(BaseModel):
