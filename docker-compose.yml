@@ -28,6 +28,11 @@ services:
     env_file:
       - .env
     environment:
+      # .env 中的宿主机 127.0.0.1 代理不能在容器内使用；当前网络可直连外部数据源。
+      HTTP_PROXY: ""
+      HTTPS_PROXY: ""
+      http_proxy: ""
+      https_proxy: ""
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-riskatlas}:${POSTGRES_PASSWORD:-riskatlas}@postgres:5432/${POSTGRES_DB:-riskatlas}
       REDIS_URL: redis://redis:6379/0
     depends_on:

@@ -21,14 +21,18 @@ _BASE = "https://api.gdeltproject.org/api/v2/doc/doc"
 class GDELTSource:
     name = "gdelt"
 
-    def __init__(self) -> None:
-        self._client = httpx.AsyncClient(timeout=12, headers={"User-Agent": "RiskAtlas/1.0"})
+    def __init__(self, *, use_proxy: bool = False) -> None:
+        self._client = httpx.AsyncClient(
+            timeout=12,
+            headers={"User-Agent": "RiskAtlas/1.0"},
+            trust_env=use_proxy,
+        )
 
     async def search(
         self, query: str, *, days: int, lang: str, limit: int
     ) -> list[RawArticle]:
         # GDELT timespan: 最小 5 分钟，用 PnD
-        timespan = f"P{max(days, 1)}D"
+        timespan = f"{max(days, 1)}d"
         params = {
             "query": query,
             "mode": "ArtList",
@@ -41,9 +45,10 @@ class GDELTSource:
         resp.raise_for_status()
         try:
             data = resp.json()
-        except ValueError:
-            logger.warning("gdelt 返回非 JSON 响应（可能是限流/临时故障）: %s", resp.text[:200])
-            return []
+        except ValueError as exc:
+            detail = resp.text[:200].strip()
+            logger.warning("gdelt returned non-JSON response: %s", detail)
+            raise ValueError(f"GDELT returned non-JSON response: {detail}") from exc
         articles: list[RawArticle] = []
         for item in data.get("articles", [])[:limit]:
             url = item.get("url", "")

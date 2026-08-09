@@ -75,6 +75,8 @@ class Settings(BaseSettings):
     gdelt_enabled: bool = True
     rss_enabled: bool = True
     rss_feeds: str = ""
+    rss_query_enabled: bool = True
+    data_source_use_proxy: bool = False
     tavily_enabled: bool = False
     tavily_api_key: str = ""
     serper_enabled: bool = False

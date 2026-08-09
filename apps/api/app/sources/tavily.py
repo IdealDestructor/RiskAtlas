@@ -15,9 +15,13 @@ _BASE = "https://api.tavily.com/search"
 class TavilySource:
     name = "tavily"
 
-    def __init__(self, api_key: str) -> None:
+    def __init__(self, api_key: str, *, use_proxy: bool = False) -> None:
         self._key = api_key
-        self._client = httpx.AsyncClient(timeout=12, headers={"User-Agent": "RiskAtlas/1.0"})
+        self._client = httpx.AsyncClient(
+            timeout=12,
+            headers={"User-Agent": "RiskAtlas/1.0"},
+            trust_env=use_proxy,
+        )
 
     async def search(
         self, query: str, *, days: int, lang: str, limit: int

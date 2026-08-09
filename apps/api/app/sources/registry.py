@@ -23,15 +23,28 @@ def _bootstrap() -> None:
     if s.gdelt_enabled and "gdelt" not in _REGISTRY:
         from app.sources.gdelt import GDELTSource
 
-        register_source("gdelt", GDELTSource())
+        register_source("gdelt", GDELTSource(use_proxy=s.data_source_use_proxy))
     if s.rss_enabled and "rss" not in _REGISTRY:
         from app.sources.rss import RSSSource
 
-        register_source("rss", RSSSource(s.rss_feeds))
+        register_source("rss", RSSSource(s.rss_feeds, use_proxy=s.data_source_use_proxy))
+    if s.rss_query_enabled:
+        from app.sources.rss import QueryRSSSource, bing_news_url, google_news_url
+
+        if "google_news" not in _REGISTRY:
+            register_source(
+                "google_news",
+                QueryRSSSource("google_news", google_news_url, use_proxy=s.data_source_use_proxy),
+            )
+        if "bing_news" not in _REGISTRY:
+            register_source(
+                "bing_news",
+                QueryRSSSource("bing_news", bing_news_url, use_proxy=s.data_source_use_proxy),
+            )
     if s.tavily_enabled and s.tavily_api_key and "tavily" not in _REGISTRY:
         from app.sources.tavily import TavilySource
 
-        register_source("tavily", TavilySource(s.tavily_api_key))
+        register_source("tavily", TavilySource(s.tavily_api_key, use_proxy=s.data_source_use_proxy))
     if s.serper_enabled and s.serper_api_key and "serper" not in _REGISTRY:
         from app.sources.serper import SerperSource
 
